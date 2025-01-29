@@ -1,71 +1,124 @@
 import random
-from math import gcd
-from sympy import randprime
-def generate_prime_numbers(bits=1024):
-    p = randprime(2**(bits-1), 2**bits)
-    q = randprime(2**(bits-1), 2**bits)
-    while p == q:
-        q = randprime(2**(bits-1), 2**bits)
-    return p, q
 
 
-def generate_keypair(bits=1024):
-    p, q = generate_prime_numbers(bits)
+'''
+Euclid's algorithm for determining the greatest common divisor
+Use iteration to make it faster for larger integers
+'''
+
+
+def gcd(a, b):
+    while b != 0:
+        a, b = b, a % b
+    return a
+
+
+'''
+Euclid's extended algorithm for finding the multiplicative inverse of two numbers
+'''
+
+
+def multiplicative_inverse(e, phi):
+    d = 0
+    x1 = 0
+    x2 = 1
+    y1 = 1
+    temp_phi = phi
+
+    while e > 0:
+        temp1 = temp_phi//e
+        temp2 = temp_phi - temp1 * e
+        temp_phi = e
+        e = temp2
+
+        x = x2 - temp1 * x1
+        y = d - temp1 * y1
+
+        x2 = x1
+        x1 = x
+        d = y1
+        y1 = y
+
+    if temp_phi == 1:
+        return d + phi
+
+
+'''
+Tests to see if a number is prime.
+'''
+
+
+def is_prime(num):
+    if num == 2:
+        return True
+    if num < 2 or num % 2 == 0:
+        return False
+    for n in range(3, int(num**0.5)+2, 2):
+        if num % n == 0:
+            return False
+    return True
+
+
+def generate_key_pair(p, q):
+    if not (is_prime(p) and is_prime(q)):
+        raise ValueError('Both numbers must be prime.')
+    elif p == q:
+        raise ValueError('p and q cannot be equal')
+    # n = pq
     n = p * q
-    phi = (p - 1) * (q - 1)
 
-  
-    e = random.randrange(2, phi)
-    while gcd(e, phi) != 1:
-        e = random.randrange(2, phi)
+    # Phi is the totient of n
+    phi = (p-1) * (q-1)
 
-   
-    d = pow(e, -1, phi)
+    # Choose an integer e such that e and phi(n) are coprime
+    e = random.randrange(1, phi)
 
+    # Use Euclid's Algorithm to verify that e and phi(n) are coprime
+    g = gcd(e, phi)
+    while g != 1:
+        e = random.randrange(1, phi)
+        g = gcd(e, phi)
+
+    # Use Extended Euclid's Algorithm to generate the private key
+    d = multiplicative_inverse(e, phi)
+
+    # Return public and private key_pair
+    # Public key is (e, n) and private key is (d, n)
     return ((e, n), (d, n))
 
 
-def encrypt(public_key, plaintext):
-    e, n = public_key
-    plaintext_ints = [ord(char) for char in plaintext]
-    encrypted = [pow(char, e, n) for char in plaintext_ints]
-    return encrypted
-
-def decrypt(private_key, ciphertext):
-    d, n = private_key
-    decrypted = [pow(char, d, n) for char in ciphertext]
-    plaintext = ''.join([chr(char) for char in decrypted])
-    return plaintext
+def encrypt(pk, plaintext):
+    # Unpack the key into it's components
+    key, n = pk
+    # Convert each letter in the plaintext to numbers based on the character using a^b mod m
+    cipher = [pow(ord(char), key, n) for char in plaintext]
+    # Return the array of bytes
+    return cipher
 
 
-if __name__ == "__main__":
-    print("Generating RSA keys...")
-    public_key, private_key = generate_keypair(bits=512) 
+def decrypt(pk, ciphertext):
+    # Unpack the key into its components
+    key, n = pk
+    # Generate the plaintext based on the ciphertext and key using a^b mod m
+    aux = [str(pow(char, key, n)) for char in ciphertext]
+    # Return the array of bytes as a string
+    plain = [chr(int(char2)) for char2 in aux]
+    return ''.join(plain)
 
-    print("Public Key:", public_key)
-    print("Private Key:", private_key)
 
-    while True:
-        print("\nChoose an option:")
-        print("1. Encrypt a message")
-        print("2. Decrypt a message")
-        print("3. Exit")
+if __name__ == '__main__':
+    
 
-        choice = input("\nEnter your choice (1/2/3): ")
+    p = int(input(" - Enter a prime number (17, 19, 23, etc): "))
+    q = int(input(" - Enter another prime number (Not one you entered above): "))
 
-        if choice == '1':
-           
-            message = input("\nEnter a message to encrypt: ")
-            encrypted_message = encrypt(public_key, message)
-            print("\nEncrypted Message:", encrypted_message)
-        elif choice == '2':
-          
-            encrypted_message_input = input("\nEnter the encrypted message (space-separated numbers): ")
-            encrypted_message = list(map(int, encrypted_message_input.split()))
-            decrypted_message = decrypt(private_key, encrypted_message)
-            print("\nDecrypted Message:", decrypted_message)
-        elif choice == '3':
-            print("\nExiting the program...")
-            break
-        else:
-            print("\nInvalid choice, please try again.")
+    public, private = generate_key_pair(p, q)
+
+    print(" - Your public key is ", public, " and your private key is ", private)
+
+    message = input(" - Enter a message to encrypt with your public key: ")
+    encrypted_msg = encrypt(public, message)
+
+    print(" - Your encrypted message is: ", ''.join(map(lambda x: str(x), encrypted_msg)))
+    print(" - Decrypting message with private key ", private, " . . .")
+    print(" - Your message is: ", decrypt(private, encrypted_msg))
